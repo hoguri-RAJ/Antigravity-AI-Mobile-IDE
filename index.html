@@ -1,0 +1,2230 @@
+<!DOCTYPE html>
+<html lang="ja" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <!-- iPhoneのノッチ・ダイナミックアイランド対応＆ズーム制御 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    
+    <!-- iPhone ホーム画面追加（PWAネイティブ動作）用メタタグ -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Antigravity">
+    <meta name="theme-color" content="#09090b">
+
+    <title>Antigravity AI モバイルIDE & オーケストレーター</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts (Inter & JetBrains Mono) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- Highlight.js (シンタックスハイライト) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/swift.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/iecst.min.js"></script>
+
+    <!-- Marked.js (Markdownパース) -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        zinc: {
+                            950: '#09090b',
+                            900: '#121215',
+                            850: '#18181c',
+                            800: '#27272a',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        :root {
+            --sat: env(safe-area-inset-top, 20px);
+            --sab: env(safe-area-inset-bottom, 20px);
+        }
+
+        body {
+            background-color: #09090b;
+            color: #f4f4f5;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            overscroll-behavior-y: none;
+            -webkit-tap-highlight-color: transparent;
+            height: 100dvh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .safe-top {
+            padding-top: max(env(safe-area-inset-top), 12px);
+        }
+
+        .safe-bottom {
+            padding-bottom: max(env(safe-area-inset-bottom), 10px);
+        }
+
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        /* Antigravity ブランドのレインボーグラデーション枠線 */
+        .rainbow-border {
+            position: relative;
+            background: #121215;
+            border-radius: 9999px;
+        }
+        .rainbow-border::before {
+            content: "";
+            position: absolute;
+            inset: -1.5px;
+            border-radius: 9999px;
+            padding: 1.5px;
+            background: linear-gradient(90deg, #ff3b30, #ff9500, #ffcc00, #34c759, #007aff, #af52de);
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
+            pointer-events: none;
+        }
+
+        pre code.hljs {
+            padding: 0.85rem;
+            border-radius: 0.5rem;
+            font-size: 0.78rem;
+            line-height: 1.5;
+            background: #0d0d10 !important;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .drawer-backdrop {
+            transition: opacity 0.25s ease;
+        }
+        .drawer-panel {
+            transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        #codeEditorTextarea {
+            tab-size: 4;
+            -moz-tab-size: 4;
+            caret-color: #3b82f6;
+        }
+
+        @keyframes pulse-ring {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+        .recording-pulse {
+            animation: pulse-ring 1.5s infinite;
+        }
+    </style>
+</head>
+<body class="bg-zinc-950 text-zinc-100 select-none">
+
+    <!-- トースト通知（alert代替） -->
+    <div id="toastContainer" class="fixed top-16 left-1/2 -translate-x-1/2 z-50 pointer-events-none flex flex-col gap-2 w-[92%] max-w-sm"></div>
+
+    <!-- トップナビゲーションバー -->
+    <header class="safe-top bg-zinc-950/95 backdrop-blur-md border-b border-zinc-800/80 px-3.5 pb-2.5 flex items-center justify-between z-30 shrink-0">
+        <!-- 左：Cloud / GitHub リポジトリドロワー開く -->
+        <button onclick="toggleDrawer(true)" class="w-9 h-9 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center active:scale-95 transition-transform shrink-0" aria-label="リポジトリ一覧">
+            <i data-lucide="menu" class="w-4 h-4 text-zinc-300"></i>
+        </button>
+
+        <!-- 中央：現在のファイル名・リポジトリ名・ブランチ -->
+        <button onclick="openFileSelectorModal()" class="flex flex-col items-center justify-center px-2 py-0.5 rounded-xl active:bg-zinc-900 transition-colors min-w-0 flex-1 mx-1">
+            <div class="flex items-center gap-1 max-w-full">
+                <span id="headerFileName" class="text-[13px] font-semibold text-white tracking-tight truncate">SloshingPhysics.js</span>
+                <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-zinc-500 shrink-0"></i>
+            </div>
+            <div class="flex items-center gap-1.5 text-[10px] text-zinc-400 max-w-full">
+                <i id="headerProjectIcon" data-lucide="cloud" class="w-3 h-3 text-blue-400 shrink-0"></i>
+                <span id="headerProjectName" class="truncate">sloshing-digital-twin</span>
+                <span id="headerBranchBadge" class="px-1.5 py-0.2 rounded bg-zinc-800/90 text-zinc-300 font-mono text-[9px] shrink-0">main</span>
+            </div>
+        </button>
+
+        <!-- 右：接続ステータス＆設定モーダルボタン -->
+        <div class="flex items-center gap-1.5 shrink-0">
+            <button onclick="openSettingsModal()" class="h-9 px-2.5 rounded-full bg-zinc-900 border border-zinc-800 flex items-center gap-1.5 active:scale-95 transition-transform" aria-label="設定">
+                <span id="githubStatusDot" class="w-2 h-2 rounded-full bg-amber-400" title="Demo Mode"></span>
+                <span id="webhookStatusDot" class="w-2 h-2 rounded-full bg-zinc-600" title="Webhook未設定"></span>
+                <i data-lucide="settings" class="w-4 h-4 text-zinc-300 ml-0.5"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- ステータスインジケーターバー -->
+    <div class="bg-zinc-900/70 border-b border-zinc-800/70 px-3.5 py-1.5 flex items-center justify-between text-[10px] shrink-0">
+        <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full rainbow-border text-zinc-200 font-medium shrink-0">
+                <span class="text-amber-400">✦</span>
+                <span>Gemini ➔ Copilot ➔ PC</span>
+            </span>
+            <span id="connectionModeLabel" class="px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 font-medium shrink-0">
+                Demo Mode
+            </span>
+        </div>
+        <button onclick="switchTab('editor')" class="text-zinc-400 hover:text-zinc-200 flex items-center gap-1 py-0.5 px-1.5 rounded active:bg-zinc-800 shrink-0 font-mono">
+            <span id="lineCountLabel">24 lines</span>
+        </button>
+    </div>
+
+    <!-- メインコンテンツエリア（4タブ構成） -->
+    <main class="flex-1 overflow-hidden relative flex flex-col">
+
+        <!-- =========================================================
+             TAB 1: VIBECODE（AIチャット & オーケストレーター）
+             ========================================================= -->
+        <section id="view-vibecode" class="flex-1 flex flex-col overflow-hidden">
+            <!-- チャット履歴 -->
+            <div id="chatMessages" class="flex-1 overflow-y-auto px-3.5 py-3.5 space-y-4 select-text no-scrollbar">
+                <!-- JSで動的描画 -->
+            </div>
+
+            <!-- 画像添付プレビューバー（添付時のみ表示） -->
+            <div id="imageAttachmentBar" class="hidden px-3.5 py-2 bg-zinc-900 border-t border-zinc-800 flex items-center justify-between shrink-0">
+                <div class="flex items-center gap-2.5">
+                    <img id="attachedImageThumb" src="" alt="添付画像" class="w-10 h-10 rounded-lg object-cover border border-zinc-700">
+                    <div class="text-xs">
+                        <p class="text-zinc-200 font-medium">画像が添付されています</p>
+                        <p class="text-[10px] text-zinc-400">Geminiマルチモーダル解析でコード化します</p>
+                    </div>
+                </div>
+                <button onclick="clearAttachedImage()" class="p-1.5 rounded-lg bg-zinc-800 text-zinc-400 hover:text-white">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+
+            <!-- 実行モード切替ピル（3モード：単独解析 / フル自動リレー / PC直接） -->
+            <div class="px-3 pt-2 pb-1.5 flex gap-1.5 overflow-x-auto no-scrollbar border-t border-zinc-900 bg-zinc-950/95 shrink-0">
+                <button onclick="setOrchestrationMode('gemini')" id="modePill-gemini" class="shrink-0 text-[11px] font-medium px-3 py-1.5 rounded-full border transition-all flex items-center gap-1 bg-blue-600/20 border-blue-500 text-blue-300">
+                    <span>✨</span> Gemini 設計・解析
+                </button>
+                <button onclick="setOrchestrationMode('relay')" id="modePill-relay" class="shrink-0 text-[11px] font-medium px-3 py-1.5 rounded-full border transition-all flex items-center gap-1 bg-zinc-900 border-zinc-800 text-zinc-400">
+                    <span>🔗</span> フル自動リレー (Gemini➔Copilot➔PC)
+                </button>
+                <button onclick="setOrchestrationMode('webhook')" id="modePill-webhook" class="shrink-0 text-[11px] font-medium px-3 py-1.5 rounded-full border transition-all flex items-center gap-1 bg-zinc-900 border-zinc-800 text-zinc-400">
+                    <span>💻</span> 自宅PCへ直接指示
+                </button>
+            </div>
+
+            <!-- チャット入力フォーム（音声入力・画像添付・送信） -->
+            <div class="px-3 pb-2.5 pt-1 bg-zinc-950 shrink-0">
+                <div class="flex items-end gap-1.5 bg-zinc-900 border border-zinc-800 rounded-2xl p-1.5 focus-within:border-blue-500/70 transition-colors">
+                    <!-- 画像添付ボタン -->
+                    <label class="w-9 h-9 rounded-xl hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 flex items-center justify-center shrink-0 cursor-pointer active:scale-95 transition" title="スクショ・写真を添付">
+                        <i data-lucide="image-plus" class="w-4 h-4"></i>
+                        <input type="file" id="imageFileInput" accept="image/*" class="hidden" onchange="handleImageUpload(event)">
+                    </label>
+
+                    <!-- 音声入力ボタン -->
+                    <button type="button" id="voiceInputBtn" onclick="toggleVoiceInput()" class="w-9 h-9 rounded-xl hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 flex items-center justify-center shrink-0 active:scale-95 transition" title="音声で指示を入力">
+                        <i data-lucide="mic" class="w-4 h-4"></i>
+                    </button>
+
+                    <!-- テキスト入力エリア -->
+                    <textarea id="chatInput" rows="1" placeholder="AIに設計・実装・PC連携を指示..." class="flex-1 bg-transparent text-sm text-white placeholder-zinc-500 px-1.5 py-2 resize-none focus:outline-none max-h-28 select-text" oninput="autoResizeTextarea(this)"></textarea>
+
+                    <!-- 送信ボタン -->
+                    <button id="sendChatBtn" onclick="handleSendMessage()" class="w-9 h-9 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-800 disabled:text-zinc-600 text-white flex items-center justify-center shrink-0 active:scale-95 transition-all">
+                        <i data-lucide="arrow-up" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- =========================================================
+             TAB 2: DIFF（差分レビュー＆ワンタップ承認）
+             ========================================================= -->
+        <section id="view-diff" class="hidden flex-1 flex flex-col overflow-hidden bg-[#0d0d10]">
+            <div class="px-4 py-2.5 bg-zinc-900 border-b border-zinc-800 flex items-center justify-between shrink-0">
+                <div>
+                    <h2 class="text-xs font-bold text-white flex items-center gap-1.5">
+                        <i data-lucide="git-compare" class="w-4 h-4 text-emerald-400"></i>
+                        <span>差分レビュー (Diff)</span>
+                    </h2>
+                    <p id="diffTargetFileLabel" class="text-[10px] text-zinc-400 font-mono mt-0.5">対象: SloshingPhysics.js</p>
+                </div>
+                <div id="diffActionButtons" class="flex items-center gap-1.5">
+                    <button onclick="discardPendingDiff()" class="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-300 active:scale-95">破棄</button>
+                    <button onclick="approvePendingDiff()" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-semibold text-white flex items-center gap-1 active:scale-95 shadow-lg shadow-emerald-600/20">
+                        <i data-lucide="check" class="w-3.5 h-3.5"></i> 承認して反映
+                    </button>
+                </div>
+            </div>
+
+            <!-- 差分表示コンテナ -->
+            <div id="diffViewerContainer" class="flex-1 overflow-auto p-3 font-mono text-xs leading-relaxed select-text">
+                <!-- JSで差分をレンダリング -->
+            </div>
+        </section>
+
+        <!-- =========================================================
+             TAB 3: EDITOR（モバイルコードエディタ & GitHub Commit/Push）
+             ========================================================= -->
+        <section id="view-editor" class="hidden flex-1 flex flex-col overflow-hidden bg-[#0d0d10]">
+            <!-- ファイルタブバー -->
+            <div id="fileTabsBar" class="flex items-center gap-1 px-2 py-1.5 bg-zinc-950 border-b border-zinc-800 overflow-x-auto no-scrollbar shrink-0">
+                <!-- JSで動的生成 -->
+            </div>
+
+            <!-- エディタツールバー -->
+            <div class="flex items-center justify-between px-3 py-1.5 bg-zinc-900/90 border-b border-zinc-800/80 text-xs shrink-0">
+                <div class="flex items-center gap-2">
+                    <span id="editorLangBadge" class="px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 font-mono text-[10px]">javascript</span>
+                    <span id="editorSaveStatus" class="text-zinc-500 text-[10px]">保存済み</span>
+                </div>
+                <div class="flex items-center gap-1.5">
+                    <button onclick="copyEditorCode()" class="px-2 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 flex items-center gap-1 text-[11px] active:scale-95">
+                        <i data-lucide="copy" class="w-3 h-3"></i> Copy
+                    </button>
+                    <button onclick="openCommitModal()" class="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium flex items-center gap-1 text-[11px] active:scale-95">
+                        <i data-lucide="git-commit" class="w-3.5 h-3.5"></i> Commit & Push
+                    </button>
+                </div>
+            </div>
+
+            <!-- コード編集エリア（行番号付き） -->
+            <div class="flex-1 flex overflow-hidden relative font-mono text-[13px] leading-relaxed">
+                <div id="lineNumbers" class="w-10 py-3 px-1 text-right text-zinc-600 bg-zinc-950/50 border-r border-zinc-800/50 select-none overflow-hidden shrink-0">
+                    1
+                </div>
+                <textarea id="codeEditorTextarea" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off" class="flex-1 bg-transparent text-zinc-100 p-3 resize-none focus:outline-none overflow-auto select-text whitespace-pre" oninput="onEditorInput()" onscroll="syncEditorScroll()"></textarea>
+            </div>
+
+            <!-- モバイルプログラミング用補助記号キーバー -->
+            <div class="flex items-center gap-1 px-2 py-1.5 bg-zinc-900 border-t border-zinc-800 overflow-x-auto no-scrollbar shrink-0">
+                <button onclick="insertSnippet('    ')" class="px-2.5 py-1 rounded bg-zinc-800 text-zinc-200 font-mono text-xs active:bg-zinc-700">Tab</button>
+                <button onclick="insertSnippet('{')" class="px-3 py-1 rounded bg-zinc-800 text-zinc-200 font-mono text-xs active:bg-zinc-700">{</button>
+                <button onclick="insertSnippet('}')" class="px-3 py-1 rounded bg-zinc-800 text-zinc-200 font-mono text-xs active:bg-zinc-700">}</button>
+                <button onclick="insertSnippet('(')" class="px-3 py-1 rounded bg-zinc-800 text-zinc-200 font-mono text-xs active:bg-zinc-700">(</button>
+                <button onclick="insertSnippet(')')" class="px-3 py-1 rounded bg-zinc-800 text-zinc-200 font-mono text-xs active:bg-zinc-700">)</button>
+                <button onclick="insertSnippet('[')" class="px-3 py-1 rounded bg-zinc-800 text-zinc-200 font-mono text-xs active:bg-zinc-700">[</button>
+                <button onclick="insertSnippet(']')" class="px-3 py-1 rounded bg-zinc-800 text-zinc-200 font-mono text-xs active:bg-zinc-700">]</button>
+                <button onclick="insertSnippet(':= ')" class="px-2.5 py-1 rounded bg-zinc-800 text-zinc-200 font-mono text-xs active:bg-zinc-700">:=</button>
+                <button onclick="insertSnippet('=> ')" class="px-2.5 py-1 rounded bg-zinc-800 text-zinc-200 font-mono text-xs active:bg-zinc-700">=&gt;</button>
+                <button onclick="insertSnippet(';')" class="px-3 py-1 rounded bg-zinc-800 text-zinc-200 font-mono text-xs active:bg-zinc-700">;</button>
+                <button onclick="insertSnippet('// ')" class="px-2.5 py-1 rounded bg-zinc-800 text-zinc-200 font-mono text-xs active:bg-zinc-700">//</button>
+            </div>
+        </section>
+
+        <!-- =========================================================
+             TAB 4: PREVIEW（ライブプレビュー & 実行コンソール）
+             ========================================================= -->
+        <section id="view-preview" class="hidden flex-1 flex flex-col overflow-hidden bg-zinc-950">
+            <div class="flex items-center justify-between px-4 py-2 bg-zinc-900 border-b border-zinc-800 shrink-0">
+                <div class="flex items-center gap-2">
+                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span class="text-xs font-medium text-zinc-300" id="previewModeTitle">Live Sandbox Preview</span>
+                </div>
+                <button onclick="runCodePreview()" class="text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-2.5 py-1 rounded-lg flex items-center gap-1 active:scale-95">
+                    <i data-lucide="rotate-cw" class="w-3 h-3"></i> 再実行
+                </button>
+            </div>
+
+            <!-- Webプレビュー用 iframe -->
+            <div id="webPreviewContainer" class="flex-1 bg-white relative overflow-hidden">
+                <iframe id="previewIframe" class="w-full h-full border-0" sandbox="allow-scripts allow-modals"></iframe>
+            </div>
+
+            <!-- コンソール出力エリア -->
+            <div id="consoleOutputContainer" class="h-44 bg-[#09090b] border-t border-zinc-800 flex flex-col shrink-0">
+                <div class="px-3 py-1.5 bg-zinc-900/80 border-b border-zinc-800/80 flex items-center justify-between">
+                    <span class="text-[11px] font-mono text-zinc-400 flex items-center gap-1.5">
+                        <i data-lucide="terminal" class="w-3.5 h-3.5 text-blue-400"></i> CONSOLE / OUTPUT
+                    </span>
+                    <button onclick="clearConsole()" class="text-[11px] text-zinc-500 hover:text-zinc-300">クリア</button>
+                </div>
+                <div id="consoleLogs" class="flex-1 p-3 overflow-y-auto font-mono text-xs space-y-1.5 select-text">
+                    <div class="text-zinc-500">// プレビュータブを開くとコードが自動実行されます</div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- ボトムタブナビゲーション（4タブ） -->
+    <nav class="safe-bottom bg-zinc-950/95 backdrop-blur-lg border-t border-zinc-800/90 px-2 pt-1.5 flex items-center justify-around shrink-0 z-30">
+        <button onclick="switchTab('vibecode')" id="tab-vibecode" class="flex flex-col items-center gap-0.5 py-1 px-3 rounded-xl text-blue-400 transition-colors">
+            <i data-lucide="sparkles" class="w-5 h-5"></i>
+            <span class="text-[10px] font-medium">Vibecode</span>
+        </button>
+        <button onclick="switchTab('diff')" id="tab-diff" class="relative flex flex-col items-center gap-0.5 py-1 px-3 rounded-xl text-zinc-500 hover:text-zinc-300 transition-colors">
+            <i data-lucide="git-compare" class="w-5 h-5"></i>
+            <span class="text-[10px] font-medium">差分Diff</span>
+            <span id="diffBadgeDot" class="hidden absolute top-1 right-2.5 w-2 h-2 rounded-full bg-emerald-400"></span>
+        </button>
+        <button onclick="switchTab('editor')" id="tab-editor" class="flex flex-col items-center gap-0.5 py-1 px-3 rounded-xl text-zinc-500 hover:text-zinc-300 transition-colors">
+            <i data-lucide="code-2" class="w-5 h-5"></i>
+            <span class="text-[10px] font-medium">エディタ</span>
+        </button>
+        <button onclick="switchTab('preview')" id="tab-preview" class="flex flex-col items-center gap-0.5 py-1 px-3 rounded-xl text-zinc-500 hover:text-zinc-300 transition-colors">
+            <i data-lucide="play-circle" class="w-5 h-5"></i>
+            <span class="text-[10px] font-medium">プレビュー</span>
+        </button>
+    </nav>
+
+    <!-- =========================================================
+         左スライドアウトドロワー：Cloud & GitHub リポジトリ一覧
+         ========================================================= -->
+    <div id="cloudDrawer" class="fixed inset-0 z-50 hidden">
+        <div id="drawerBackdrop" onclick="toggleDrawer(false)" class="absolute inset-0 bg-black/75 backdrop-blur-xs opacity-0 drawer-backdrop"></div>
+        
+        <aside id="drawerPanel" class="relative w-[84%] max-w-xs h-full bg-[#0c0c0e] border-r border-zinc-800/90 flex flex-col safe-top safe-bottom -translate-x-full drawer-panel">
+            <!-- Cloud ヘッダー -->
+            <div class="px-4 pt-3 pb-3.5 flex items-center justify-between border-b border-zinc-900">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-8 h-8 rounded-lg bg-white flex items-center justify-center shadow-sm">
+                        <svg viewBox="0 0 36 36" class="w-6 h-6">
+                            <defs>
+                                <linearGradient id="agRing" x1="0%" y1="0%" x2="100%" y2="100%">
+                                    <stop offset="0%" stop-color="#ff3b30"/>
+                                    <stop offset="33%" stop-color="#ffcc00"/>
+                                    <stop offset="66%" stop-color="#34c759"/>
+                                    <stop offset="100%" stop-color="#007aff"/>
+                                </linearGradient>
+                            </defs>
+                            <circle cx="18" cy="18" r="14" fill="none" stroke="url(#agRing)" stroke-width="3.2"/>
+                            <path d="M13 13 L18 18 L13 23 M19 23 L24 23" stroke="#007aff" stroke-width="2.6" stroke-linecap="square" fill="none"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h2 class="text-lg font-bold tracking-tight text-white leading-none">Cloud & GitHub</h2>
+                        <span id="drawerUserLabel" class="text-[10px] text-zinc-500">ローカルデモ環境</span>
+                    </div>
+                </div>
+                <div class="flex items-center gap-1">
+                    <button onclick="syncGithubRepos()" id="syncGithubBtn" class="w-8 h-8 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-300 active:scale-95" title="GitHubリポジトリ同期">
+                        <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+                    </button>
+                    <button onclick="openNewProjectModal()" class="w-8 h-8 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-300 active:scale-95" title="新規ローカルプロジェクト">
+                        <i data-lucide="plus" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- リポジトリリスト -->
+            <div id="projectListContainer" class="flex-1 overflow-y-auto px-3 py-3 space-y-1 no-scrollbar">
+                <!-- JSで動的描画 -->
+            </div>
+
+            <!-- ドロワー下部：iPhoneアプリ化ガイド＆設定 -->
+            <div class="p-3.5 border-t border-zinc-900 space-y-2">
+                <button onclick="toggleDrawer(false); openSettingsModal();" class="w-full py-2.5 px-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 flex items-center justify-between text-xs text-zinc-200 active:scale-98">
+                    <span class="flex items-center gap-2">
+                        <i data-lucide="key-round" class="w-4 h-4 text-emerald-400"></i>
+                        <span>GitHub PAT・PC Webhook設定</span>
+                    </span>
+                    <i data-lucide="chevron-right" class="w-4 h-4 text-zinc-500"></i>
+                </button>
+                <button onclick="toggleDrawer(false); openModal('pwaGuideModal');" class="w-full py-2 px-3 rounded-xl bg-zinc-950 hover:bg-zinc-900 border border-zinc-800/80 flex items-center justify-between text-[11px] text-zinc-400 active:scale-98">
+                    <span class="flex items-center gap-2">
+                        <i data-lucide="smartphone" class="w-3.5 h-3.5 text-blue-400"></i>
+                        <span>iPhoneホーム画面に追加する方法</span>
+                    </span>
+                    <i data-lucide="chevron-right" class="w-3.5 h-3.5 text-zinc-600"></i>
+                </button>
+            </div>
+        </aside>
+    </div>
+
+    <!-- =========================================================
+         モーダル1：IDE・GitHub・自宅PC Webhook 統合設定
+         ========================================================= -->
+    <div id="settingsModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-black/80 backdrop-blur-xs">
+        <div class="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4 shadow-2xl max-h-[88dvh] overflow-y-auto">
+            <div class="flex items-center justify-between border-b border-zinc-800 pb-3">
+                <h3 class="text-base font-bold text-white flex items-center gap-2">
+                    <i data-lucide="sliders" class="w-4 h-4 text-blue-400"></i> 連携・エージェント設定
+                </h3>
+                <button onclick="closeModal('settingsModal')" class="text-zinc-400 hover:text-white">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div class="space-y-4 text-xs">
+                <!-- 1. GitHub Personal Access Token -->
+                <div class="p-3.5 rounded-xl bg-zinc-950 border border-zinc-800/90 space-y-2.5">
+                    <div class="flex items-center justify-between">
+                        <label class="font-semibold text-zinc-200 flex items-center gap-1.5">
+                            <i data-lucide="github" class="w-4 h-4 text-white"></i> GitHub Personal Access Token
+                        </label>
+                        <span id="ghTestBadge" class="text-[10px] px-2 py-0.5 rounded bg-zinc-800 text-zinc-400">未接続</span>
+                    </div>
+                    <div class="relative flex items-center">
+                        <input type="password" id="githubTokenInput" placeholder="ghp_xxxxxxxxxxxx または github_pat_..." class="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-3 pr-10 py-2 text-white font-mono text-xs focus:outline-none focus:border-blue-500">
+                        <button type="button" onclick="togglePasswordVisibility('githubTokenInput')" class="absolute right-2.5 text-zinc-400 hover:text-white">
+                            <i data-lucide="eye" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                    <div class="flex items-center justify-between gap-2">
+                        <input type="text" id="copilotAssigneeInput" placeholder="Copilotアサイン名 (例: copilot)" value="copilot" class="flex-1 bg-zinc-900 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-[11px] text-zinc-300 focus:outline-none">
+                        <button type="button" onclick="testGithubConnection()" class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-medium shrink-0 active:scale-95">
+                            接続テスト & 同期
+                        </button>
+                    </div>
+                    <p class="text-[10px] text-zinc-500 leading-relaxed">※`repo` 権限のあるPATを入力すると、実リポジトリの読込・コミット・Copilot向けIssue起票が有効になります（端末内のみ保存）。</p>
+                </div>
+
+                <!-- 2. 自宅PC / Agent 汎用Webhook URL -->
+                <div class="p-3.5 rounded-xl bg-zinc-950 border border-zinc-800/90 space-y-2.5">
+                    <div class="flex items-center justify-between">
+                        <label class="font-semibold text-zinc-200 flex items-center gap-1.5">
+                            <i data-lucide="webhook" class="w-4 h-4 text-emerald-400"></i> 自宅PC / エージェント Webhook URL
+                        </label>
+                        <span id="whTestBadge" class="text-[10px] px-2 py-0.5 rounded bg-zinc-800 text-zinc-400">任意</span>
+                    </div>
+                    <input type="url" id="webhookUrlInput" placeholder="https://mac-mini.tailnet.ts.net/webhook" class="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-white font-mono text-xs focus:outline-none focus:border-emerald-500">
+                    <input type="password" id="webhookSecretInput" placeholder="認証ヘッダー Authorization Bearer (任意)" class="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-white font-mono text-xs focus:outline-none focus:border-emerald-500">
+                    <div class="flex items-center justify-between pt-0.5">
+                        <span class="text-[10px] text-zinc-500">JSON形式でPOST送信します</span>
+                        <button type="button" onclick="testWebhookConnection()" class="px-3 py-1.5 rounded-lg bg-emerald-600/20 border border-emerald-500/40 text-emerald-300 hover:bg-emerald-600/30 font-medium active:scale-95">
+                            テストJSON送信
+                        </button>
+                    </div>
+                    <div id="webhookTestResult" class="hidden p-2 rounded-lg bg-zinc-900 border border-zinc-800 font-mono text-[10px] text-zinc-300 break-all"></div>
+                </div>
+
+                <!-- 3. カスタム Gemini API Key（任意） -->
+                <div class="p-3 rounded-xl bg-zinc-950 border border-zinc-800/90 space-y-2">
+                    <label class="font-semibold text-zinc-300 block">カスタム Gemini API Key（通常は空欄でOK）</label>
+                    <input type="password" id="customApiKeyInput" placeholder="Canvas環境では自動認証されます" class="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-white font-mono text-xs focus:outline-none">
+                </div>
+            </div>
+
+            <div class="flex gap-2 pt-1">
+                <button onclick="resetAllData()" class="px-3 py-2.5 rounded-xl bg-zinc-800 text-xs text-red-400 hover:text-red-300">初期化</button>
+                <button onclick="saveSettings()" class="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-xs font-semibold text-white">設定を保存して閉じる</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- =========================================================
+         モーダル2：GitHub Commit & Push モーダル
+         ========================================================= -->
+    <div id="commitModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-black/80 backdrop-blur-xs">
+        <div class="w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4 shadow-2xl">
+            <div class="flex items-center justify-between">
+                <h3 class="text-base font-bold text-white flex items-center gap-2">
+                    <i data-lucide="git-commit" class="w-4 h-4 text-blue-400"></i> GitHubへ Commit & Push
+                </h3>
+                <button onclick="closeModal('commitModal')" class="text-zinc-400 hover:text-white">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div class="space-y-3 text-xs">
+                <div class="p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 font-mono text-[11px] text-zinc-300">
+                    <div>Repo: <span id="commitRepoName" class="text-blue-400"></span></div>
+                    <div>File: <span id="commitFilePath" class="text-emerald-400"></span></div>
+                </div>
+                <div>
+                    <label class="block text-zinc-400 mb-1">コミットメッセージ</label>
+                    <input type="text" id="commitMessageInput" value="feat: update code from Antigravity Mobile IDE" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-blue-500">
+                </div>
+            </div>
+            <div class="flex gap-2">
+                <button onclick="closeModal('commitModal')" class="flex-1 py-2.5 rounded-xl bg-zinc-800 text-xs text-zinc-300">キャンセル</button>
+                <button id="confirmCommitBtn" onclick="executeGithubCommit()" class="flex-1 py-2.5 rounded-xl bg-blue-600 text-xs font-semibold text-white">Push実行</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- =========================================================
+         モーダル3：新規プロジェクト / 新規ファイル作成
+         ========================================================= -->
+    <div id="newItemModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-black/80 backdrop-blur-xs">
+        <div class="w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4 shadow-2xl">
+            <div class="flex items-center justify-between">
+                <h3 id="newItemModalTitle" class="text-base font-bold text-white">新規プロジェクト作成</h3>
+                <button onclick="closeModal('newItemModal')" class="text-zinc-400 hover:text-white">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div class="space-y-3">
+                <div>
+                    <label class="block text-xs text-zinc-400 mb-1" id="newItemInputLabel">プロジェクト名</label>
+                    <input type="text" id="newItemNameInput" placeholder="例: sloshing-sim-v2" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500">
+                </div>
+            </div>
+            <div class="flex gap-2 pt-1">
+                <button onclick="closeModal('newItemModal')" class="flex-1 py-2.5 rounded-xl bg-zinc-800 text-xs font-medium text-zinc-300">キャンセル</button>
+                <button onclick="confirmCreateNewItem()" class="flex-1 py-2.5 rounded-xl bg-blue-600 text-xs font-semibold text-white">作成</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- =========================================================
+         モーダル4：ファイル切替モーダル
+         ========================================================= -->
+    <div id="fileSelectorModal" class="fixed inset-0 z-50 hidden items-end sm:items-center justify-center p-4 bg-black/80 backdrop-blur-xs">
+        <div class="w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4 shadow-2xl mb-2 sm:mb-0">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h3 class="text-base font-bold text-white">ファイル一覧</h3>
+                    <p id="modalProjectSubtitle" class="text-xs text-zinc-400">sloshing-digital-twin</p>
+                </div>
+                <button onclick="closeModal('fileSelectorModal')" class="text-zinc-400 hover:text-white">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div id="modalFileList" class="space-y-1.5 max-h-60 overflow-y-auto">
+                <!-- JSで描画 -->
+            </div>
+            <button onclick="closeModal('fileSelectorModal'); openNewFileModal();" class="w-full py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-blue-400 flex items-center justify-center gap-1.5">
+                <i data-lucide="file-plus" class="w-4 h-4"></i> 新しいファイルを追加
+            </button>
+        </div>
+    </div>
+
+    <!-- =========================================================
+         モーダル5：iPhoneホーム画面追加ガイド
+         ========================================================= -->
+    <div id="pwaGuideModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-black/80 backdrop-blur-xs">
+        <div class="w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4 shadow-2xl">
+            <div class="flex items-center justify-between">
+                <h3 class="text-base font-bold text-white flex items-center gap-2">
+                    <span>📲</span> iPhoneアプリとして使う手順
+                </h3>
+                <button onclick="closeModal('pwaGuideModal')" class="text-zinc-400 hover:text-white">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <ol class="space-y-3 text-xs text-zinc-300 leading-relaxed">
+                <li class="flex items-start gap-2.5">
+                    <span class="w-5 h-5 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center shrink-0 mt-0.5">1</span>
+                    <span>このページをiPhoneの <strong>Safari</strong> で開きます。</span>
+                </li>
+                <li class="flex items-start gap-2.5">
+                    <span class="w-5 h-5 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center shrink-0 mt-0.5">2</span>
+                    <span>画面下の共有ボタン（四角から上矢印が出ているアイコン）をタップします。</span>
+                </li>
+                <li class="flex items-start gap-2.5">
+                    <span class="w-5 h-5 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center shrink-0 mt-0.5">3</span>
+                    <span><strong>「ホーム画面に追加」</strong>を選ぶと、iPhoneのホーム画面にアイコンが作成され、全画面のネイティブアプリとして起動できます！</span>
+                </li>
+            </ol>
+            <button onclick="closeModal('pwaGuideModal')" class="w-full py-2.5 rounded-xl bg-zinc-800 text-xs font-semibold text-white">閉じる</button>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // 1. デフォルトリポジトリ＆状態管理
+        // ==========================================
+        const DEFAULT_PROJECTS = [
+            {
+                id: 'sloshing-digital-twin',
+                name: 'sloshing-digital-twin',
+                owner: 'demo-user',
+                branch: 'main',
+                isRealGithub: false,
+                activeFileId: 'SloshingPhysics.js',
+                files: [
+                    {
+                        id: 'SloshingPhysics.js',
+                        name: 'SloshingPhysics.js',
+                        path: 'src/SloshingPhysics.js',
+                        language: 'javascript',
+                        sha: null,
+                        loaded: true,
+                        content: `// 液体スロッシング減衰パラメータ計算モデル
+class SloshingDamper {
+    constructor(tankWidth = 0.8, fluidHeight = 0.45, dampingRatio = 0.04) {
+        this.tankWidth = tankWidth;
+        this.fluidHeight = fluidHeight;
+        this.dampingRatio = dampingRatio;
+        this.gravity = 9.81;
+    }
+
+    // 固有振動数 (rad/s) の算出
+    getNaturalFrequency() {
+        const k = Math.PI / this.tankWidth;
+        return Math.sqrt(this.gravity * k * Math.tanh(k * this.fluidHeight));
+    }
+
+    // 減衰ピークの抑制率を評価
+    evaluateSuppression(accelInput) {
+        const omega = this.getNaturalFrequency();
+        const peakWave = (accelInput / this.gravity) * (1 / (2 * this.dampingRatio));
+        return {
+            omegaHz: (omega / (2 * Math.PI)).toFixed(3),
+            maxWaveHeightMm: (peakWave * 1000).toFixed(1)
+        };
+    }
+}
+
+const sim = new SloshingDamper(0.8, 0.45, 0.05);
+console.log("シミュレーション結果:", sim.evaluateSuppression(1.2));`
+                    },
+                    {
+                        id: 'dashboard.html',
+                        name: 'dashboard.html',
+                        path: 'public/dashboard.html',
+                        language: 'html',
+                        sha: null,
+                        loaded: true,
+                        content: `<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <script src="https://cdn.tailwindcss.com"><\/script>
+</head>
+<body class="bg-zinc-950 text-white p-5 font-sans">
+  <div class="max-w-md mx-auto space-y-4">
+    <div class="flex items-center justify-between">
+      <h1 class="text-lg font-bold">🌊 Sloshing Digital Twin</h1>
+      <span class="text-xs px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-400">Active</span>
+    </div>
+    <div class="grid grid-cols-2 gap-3">
+      <div class="bg-zinc-900 border border-zinc-800 rounded-2xl p-3.5">
+        <p class="text-[11px] text-zinc-400">固有振動数</p>
+        <p class="text-xl font-bold text-blue-400 mt-1">0.954 Hz</p>
+      </div>
+      <div class="bg-zinc-900 border border-zinc-800 rounded-2xl p-3.5">
+        <p class="text-[11px] text-zinc-400">最大波高予測</p>
+        <p class="text-xl font-bold text-emerald-400 mt-1">12.2 mm</p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>`
+                    }
+                ]
+            },
+            {
+                id: 'studio5000-aoi-lib',
+                name: 'studio5000-aoi-lib',
+                owner: 'demo-user',
+                branch: 'main',
+                isRealGithub: false,
+                activeFileId: 'S_Curve_Motion.st',
+                files: [
+                    {
+                        id: 'S_Curve_Motion.st',
+                        name: 'S_Curve_Motion.st',
+                        path: 'AOI/S_Curve_Motion.st',
+                        language: 'iecst',
+                        sha: null,
+                        loaded: true,
+                        content: `// Studio 5000 Structured Text - S字加減速プロファイル制御AOI
+IF Enable AND NOT Fault THEN
+    TargetVelocity := MaxVelocity * VelocityOverride;
+    AccelRate := (TargetVelocity - CurrentVelocity) / RampTimeSec;
+    JerkLimitedAccel := AccelRate * 0.85;
+    CurrentVelocity := CurrentVelocity + (JerkLimitedAccel * ScanTimeSec);
+ELSE
+    CurrentVelocity := 0.0;
+END_IF;`
+                    }
+                ]
+            },
+            {
+                id: 'openclaw-automations',
+                name: 'openclaw-automations',
+                owner: 'demo-user',
+                branch: 'main',
+                isRealGithub: false,
+                activeFileId: 'webhook_handler.py',
+                files: [
+                    {
+                        id: 'webhook_handler.py',
+                        name: 'webhook_handler.py',
+                        path: 'scripts/webhook_handler.py',
+                        language: 'python',
+                        sha: null,
+                        loaded: true,
+                        content: `# Mac mini / OpenClaw Webhook Receiver Example
+import json
+from datetime import datetime
+
+def handle_mobile_relay(payload: dict):
+    event = payload.get("event")
+    spec = payload.get("gemini_spec", {})
+    issue_url = payload.get("github_issue_url", "N/A")
+    
+    print(f"[{datetime.now().isoformat()}] Received: {event}")
+    print(f"Task Title: {spec.get('title')}")
+    print(f"GitHub Issue: {issue_url}")
+    # ここでOllama(gemma4)やObsidian Markdown保存を呼び出し可能
+    return {"status": "accepted", "agent": "mac-mini-openclaw"}
+
+if __name__ == "__main__":
+    sample = {"event": "ai_relay_task", "gemini_spec": {"title": "Test"}}
+    print(handle_mobile_relay(sample))`
+                    }
+                ]
+            }
+        ];
+
+        const INITIAL_MESSAGES = [
+            {
+                role: 'assistant',
+                content: `🚀 **Antigravity AI オーケストレーターへようこそ**
+
+iPhoneから **Gemini ➔ GitHub Copilot ➔ 自宅PC (Webhook)** を連携して開発を進められます。
+
+**使い方ガイド:**
+1. **✨ Gemini 設計・解析**: 現在のコードの修正や新機能の設計を相談できます。画像添付やマイク音声入力にも対応しています。
+2. **🔗 フル自動リレー**: 1回の指示で **① Geminiが仕様・Issue文面を構造化 ➔ ② GitHubにIssue起票＆Copilotへアサイン ➔ ③ 自宅PCのWebhookへJSON送信** を連続実行します。
+3. **差分Diff & GitHub Push**: AIが生成したコードは「差分確認」タブで赤・緑のハイライト比較ができ、承認後にそのままGitHubへCommit & Pushできます。
+
+まずは右上の **⚙️設定アイコン** からGitHubトークンやPCのWebhook URLを登録するか、このままデモモードでお試しください！`
+            }
+        ];
+
+        let state = {
+            projects: [],
+            activeProjectId: 'sloshing-digital-twin',
+            chatHistories: {},
+            githubToken: '',
+            githubUser: null,
+            copilotAssignee: 'copilot',
+            webhookUrl: '',
+            webhookSecret: '',
+            customApiKey: '',
+            orchestrationMode: 'gemini', // 'gemini' | 'relay' | 'webhook'
+            activeTab: 'vibecode',
+            pendingDiff: null, // { fileId, fileName, oldContent, newContent }
+            attachedImageBase64: null,
+            attachedImageMime: null,
+            newItemMode: 'project'
+        };
+
+        // ==========================================
+        // 2. 永続化・初期化
+        // ==========================================
+        function loadState() {
+            try {
+                const saved = localStorage.getItem('antigravity_orchestrator_v2');
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    state.projects = parsed.projects && parsed.projects.length ? parsed.projects : JSON.parse(JSON.stringify(DEFAULT_PROJECTS));
+                    state.activeProjectId = parsed.activeProjectId || state.projects[0].id;
+                    state.chatHistories = parsed.chatHistories || {};
+                    state.githubToken = parsed.githubToken || '';
+                    state.githubUser = parsed.githubUser || null;
+                    state.copilotAssignee = parsed.copilotAssignee || 'copilot';
+                    state.webhookUrl = parsed.webhookUrl || '';
+                    state.webhookSecret = parsed.webhookSecret || '';
+                    state.customApiKey = parsed.customApiKey || '';
+                } else {
+                    state.projects = JSON.parse(JSON.stringify(DEFAULT_PROJECTS));
+                }
+            } catch (e) {
+                state.projects = JSON.parse(JSON.stringify(DEFAULT_PROJECTS));
+            }
+
+            if (!state.chatHistories[state.activeProjectId]) {
+                state.chatHistories[state.activeProjectId] = JSON.parse(JSON.stringify(INITIAL_MESSAGES));
+            }
+        }
+
+        function saveState() {
+            try {
+                localStorage.setItem('antigravity_orchestrator_v2', JSON.stringify({
+                    projects: state.projects,
+                    activeProjectId: state.activeProjectId,
+                    chatHistories: state.chatHistories,
+                    githubToken: state.githubToken,
+                    githubUser: state.githubUser,
+                    copilotAssignee: state.copilotAssignee,
+                    webhookUrl: state.webhookUrl,
+                    webhookSecret: state.webhookSecret,
+                    customApiKey: state.customApiKey
+                }));
+            } catch (e) {
+                console.warn('localStorage save warning', e);
+            }
+        }
+
+        function getActiveProject() {
+            return state.projects.find(p => p.id === state.activeProjectId) || state.projects[0];
+        }
+
+        function getActiveFile() {
+            const proj = getActiveProject();
+            return proj.files.find(f => f.id === proj.activeFileId) || proj.files[0];
+        }
+
+        // ==========================================
+        // 3. UIレンダリング
+        // ==========================================
+        function renderAll() {
+            const proj = getActiveProject();
+            const file = getActiveFile();
+
+            document.getElementById('headerFileName').textContent = file.name;
+            document.getElementById('headerProjectName').textContent = proj.name;
+            document.getElementById('headerBranchBadge').textContent = proj.branch || 'main';
+
+            const iconEl = document.getElementById('headerProjectIcon');
+            iconEl.setAttribute('data-lucide', proj.isRealGithub ? 'github' : 'cloud');
+
+            // 接続ステータス表示更新
+            const ghDot = document.getElementById('githubStatusDot');
+            const whDot = document.getElementById('webhookStatusDot');
+            const modeBadge = document.getElementById('connectionModeLabel');
+
+            if (state.githubToken) {
+                ghDot.className = 'w-2 h-2 rounded-full bg-emerald-400';
+                modeBadge.className = 'px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 font-medium shrink-0';
+                modeBadge.textContent = state.githubUser ? `GitHub: @${state.githubUser}` : 'GitHub Connected';
+                document.getElementById('drawerUserLabel').textContent = state.githubUser ? `@${state.githubUser} (Live)` : 'GitHub連携済み';
+            } else {
+                ghDot.className = 'w-2 h-2 rounded-full bg-amber-400';
+                modeBadge.className = 'px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 font-medium shrink-0';
+                modeBadge.textContent = 'Demo Mode';
+                document.getElementById('drawerUserLabel').textContent = 'ローカルデモ環境';
+            }
+
+            if (state.webhookUrl) {
+                whDot.className = 'w-2 h-2 rounded-full bg-blue-400';
+            } else {
+                whDot.className = 'w-2 h-2 rounded-full bg-zinc-600';
+            }
+
+            const lines = (file.content || '').split('\n').length;
+            document.getElementById('lineCountLabel').textContent = `${lines} lines`;
+
+            // Diffバッジ更新
+            const diffDot = document.getElementById('diffBadgeDot');
+            if (state.pendingDiff) {
+                diffDot.classList.remove('hidden');
+            } else {
+                diffDot.classList.add('hidden');
+            }
+
+            renderProjectList();
+            renderEditor();
+            renderChatMessages();
+            renderDiffView();
+            lucide.createIcons();
+        }
+
+        function renderProjectList() {
+            const container = document.getElementById('projectListContainer');
+            container.innerHTML = '';
+
+            state.projects.forEach(proj => {
+                const isActive = proj.id === state.activeProjectId;
+                const btn = document.createElement('button');
+                btn.onclick = () => selectProject(proj.id);
+                btn.className = `w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-left transition-colors ${
+                    isActive ? 'bg-zinc-800/90 text-white font-semibold' : 'text-zinc-400 hover:bg-zinc-900/70 hover:text-zinc-200'
+                }`;
+
+                const iconName = proj.isRealGithub ? 'github' : 'cloud';
+                btn.innerHTML = `
+                    <div class="flex items-center gap-2.5 truncate">
+                        <i data-lucide="${iconName}" class="w-4 h-4 shrink-0 ${isActive ? 'text-blue-400' : 'text-zinc-500'}"></i>
+                        <span class="text-xs truncate">${escapeHtml(proj.name)}</span>
+                    </div>
+                    <span class="text-[10px] text-zinc-500 font-mono shrink-0">${proj.files.length}</span>
+                `;
+                container.appendChild(btn);
+            });
+        }
+
+        function renderEditor() {
+            const proj = getActiveProject();
+            const activeFile = getActiveFile();
+
+            const tabsBar = document.getElementById('fileTabsBar');
+            tabsBar.innerHTML = '';
+            proj.files.slice(0, 15).forEach(f => {
+                const isSelected = f.id === activeFile.id;
+                const tabBtn = document.createElement('button');
+                tabBtn.onclick = () => selectFile(f.id);
+                tabBtn.className = `px-2.5 py-1.5 rounded-lg text-[11px] font-mono flex items-center gap-1 shrink-0 transition-colors ${
+                    isSelected ? 'bg-zinc-800 text-white font-medium border border-zinc-700' : 'text-zinc-500 hover:text-zinc-300'
+                }`;
+                tabBtn.textContent = f.name;
+                tabsBar.appendChild(tabBtn);
+            });
+
+            const addTabBtn = document.createElement('button');
+            addTabBtn.onclick = () => openNewFileModal();
+            addTabBtn.className = 'p-1.5 rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900 shrink-0';
+            addTabBtn.innerHTML = `<i data-lucide="plus" class="w-3.5 h-3.5"></i>`;
+            tabsBar.appendChild(addTabBtn);
+
+            const textarea = document.getElementById('codeEditorTextarea');
+            textarea.value = activeFile.content || '';
+            document.getElementById('editorLangBadge').textContent = activeFile.language || 'text';
+            updateLineNumbers();
+        }
+
+        function updateLineNumbers() {
+            const textarea = document.getElementById('codeEditorTextarea');
+            const lineNumbers = document.getElementById('lineNumbers');
+            const lines = textarea.value.split('\n').length;
+            lineNumbers.innerHTML = Array.from({ length: lines }, (_, i) => i + 1).join('<br>');
+        }
+
+        function syncEditorScroll() {
+            document.getElementById('lineNumbers').scrollTop = document.getElementById('codeEditorTextarea').scrollTop;
+        }
+
+        function onEditorInput() {
+            const textarea = document.getElementById('codeEditorTextarea');
+            const file = getActiveFile();
+            file.content = textarea.value;
+            updateLineNumbers();
+
+            const statusEl = document.getElementById('editorSaveStatus');
+            statusEl.textContent = '保存中...';
+            saveState();
+            setTimeout(() => { statusEl.textContent = 'ローカル保存済み'; }, 350);
+            document.getElementById('lineCountLabel').textContent = `${file.content.split('\n').length} lines`;
+        }
+
+        function insertSnippet(str) {
+            const textarea = document.getElementById('codeEditorTextarea');
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            const val = textarea.value;
+            textarea.value = val.substring(0, start) + str + val.substring(end);
+            textarea.selectionStart = textarea.selectionEnd = start + str.length;
+            textarea.focus();
+            onEditorInput();
+        }
+
+        function switchTab(tabName) {
+            state.activeTab = tabName;
+            ['vibecode', 'diff', 'editor', 'preview'].forEach(t => {
+                const viewEl = document.getElementById(`view-${t}`);
+                const tabBtn = document.getElementById(`tab-${t}`);
+                if (t === tabName) {
+                    viewEl.classList.remove('hidden');
+                    tabBtn.classList.remove('text-zinc-500');
+                    tabBtn.classList.add('text-blue-400');
+                } else {
+                    viewEl.classList.add('hidden');
+                    tabBtn.classList.add('text-zinc-500');
+                    tabBtn.classList.remove('text-blue-400');
+                }
+            });
+
+            if (tabName === 'preview') runCodePreview();
+            if (tabName === 'diff') renderDiffView();
+            lucide.createIcons();
+        }
+
+        function toggleDrawer(open) {
+            const drawer = document.getElementById('cloudDrawer');
+            const backdrop = document.getElementById('drawerBackdrop');
+            const panel = document.getElementById('drawerPanel');
+
+            if (open) {
+                drawer.classList.remove('hidden');
+                requestAnimationFrame(() => {
+                    backdrop.classList.remove('opacity-0');
+                    panel.classList.remove('-translate-x-full');
+                });
+            } else {
+                backdrop.classList.add('opacity-0');
+                panel.classList.add('-translate-x-full');
+                setTimeout(() => drawer.classList.add('hidden'), 280);
+            }
+        }
+
+        // ==========================================
+        // 4. GitHub REST API 実連携（リポジトリ・ファイル取得・Commit）
+        // ==========================================
+        async function testGithubConnection() {
+            const token = document.getElementById('githubTokenInput').value.trim();
+            if (!token) {
+                showToast('GitHubトークンを入力してください', 'error');
+                return;
+            }
+            const badge = document.getElementById('ghTestBadge');
+            badge.textContent = '接続中...';
+
+            try {
+                const res = await fetch('https://api.github.com/user', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Accept': 'application/vnd.github+json'
+                    }
+                });
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const user = await res.json();
+                state.githubToken = token;
+                state.githubUser = user.login;
+                badge.textContent = `✓ @${user.login}`;
+                badge.className = 'text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300';
+                saveState();
+                await syncGithubRepos();
+            } catch (err) {
+                badge.textContent = '認証エラー';
+                badge.className = 'text-[10px] px-2 py-0.5 rounded bg-red-500/20 text-red-300';
+                showToast(`GitHub接続失敗: ${err.message}`, 'error');
+            }
+        }
+
+        async function syncGithubRepos() {
+            if (!state.githubToken) {
+                showToast('設定画面でGitHub PATを入力すると実リポジトリを同期できます');
+                return;
+            }
+            const syncBtn = document.getElementById('syncGithubBtn');
+            syncBtn.classList.add('animate-spin');
+
+            try {
+                const res = await fetch('https://api.github.com/user/repos?sort=updated&per_page=15', {
+                    headers: {
+                        'Authorization': `Bearer ${state.githubToken}`,
+                        'Accept': 'application/vnd.github+json'
+                    }
+                });
+                if (!res.ok) throw new Error(`Repos fetch failed: ${res.status}`);
+                const repos = await res.json();
+
+                const mappedRepos = repos.map(r => ({
+                    id: `gh-${r.id}`,
+                    name: r.name,
+                    owner: r.owner.login,
+                    branch: r.default_branch || 'main',
+                    isRealGithub: true,
+                    activeFileId: 'README.md',
+                    files: [
+                        {
+                            id: 'README.md',
+                            name: 'README.md',
+                            path: 'README.md',
+                            language: 'markdown',
+                            sha: null,
+                            loaded: false,
+                            content: `# ${r.name}\n\nGitHubリポジトリ (${r.full_name}) から同期されました。`
+                        }
+                    ]
+                }));
+
+                if (mappedRepos.length > 0) {
+                    // デモプロジェクトを残しつつ先頭に実リポジトリを配置
+                    const demoOnly = state.projects.filter(p => !p.isRealGithub);
+                    state.projects = [...mappedRepos, ...demoOnly];
+                    saveState();
+                    await selectProject(mappedRepos[0].id);
+                    showToast(`${mappedRepos.length}件のGitHubリポジトリを同期しました`);
+                }
+            } catch (err) {
+                showToast(`リポジトリ同期エラー: ${err.message}`, 'error');
+            } finally {
+                syncBtn.classList.remove('animate-spin');
+            }
+        }
+
+        async function selectProject(projectId) {
+            state.activeProjectId = projectId;
+            const proj = getActiveProject();
+
+            if (!state.chatHistories[projectId]) {
+                state.chatHistories[projectId] = [
+                    {
+                        role: 'assistant',
+                        content: `リポジトリ **${proj.name}** (${proj.isRealGithub ? 'GitHub Live' : 'Demo'}) を開きました。指示を入力すると、設計解析やCopilot・PC連携リレーを実行できます。`
+                    }
+                ];
+            }
+
+            // 実GitHubリポジトリの場合、ファイルツリーを取得
+            if (proj.isRealGithub && state.githubToken && proj.files.length <= 1 && !proj.treeLoaded) {
+                try {
+                    const treeUrl = `https://api.github.com/repos/${proj.owner}/${proj.name}/git/trees/${proj.branch}?recursive=1`;
+                    const res = await fetch(treeUrl, {
+                        headers: {
+                            'Authorization': `Bearer ${state.githubToken}`,
+                            'Accept': 'application/vnd.github+json'
+                        }
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        const blobs = (data.tree || []).filter(item => item.type === 'blob').slice(0, 25);
+                        if (blobs.length > 0) {
+                            proj.files = blobs.map(b => ({
+                                id: b.path,
+                                name: b.path.split('/').pop(),
+                                path: b.path,
+                                language: detectLanguageFromFilename(b.path),
+                                sha: b.sha,
+                                loaded: false,
+                                content: `// Loading ${b.path} from GitHub...`
+                            }));
+                            proj.activeFileId = proj.files[0].id;
+                            proj.treeLoaded = true;
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Tree fetch failed', e);
+                }
+            }
+
+            saveState();
+            await selectFile(proj.activeFileId);
+            toggleDrawer(false);
+        }
+
+        async function selectFile(fileId) {
+            const proj = getActiveProject();
+            proj.activeFileId = fileId;
+            const file = getActiveFile();
+
+            // 実GitHubファイルで未ロードなら中身を取得
+            if (proj.isRealGithub && state.githubToken && !file.loaded) {
+                try {
+                    const contentUrl = `https://api.github.com/repos/${proj.owner}/${proj.name}/contents/${file.path}?ref=${proj.branch}`;
+                    const res = await fetch(contentUrl, {
+                        headers: {
+                            'Authorization': `Bearer ${state.githubToken}`,
+                            'Accept': 'application/vnd.github+json'
+                        }
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.content) {
+                            // UTF-8 Base64デコード
+                            const binary = atob(data.content.replace(/\n/g, ''));
+                            const bytes = new Uint8Array(binary.length);
+                            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+                            file.content = new TextDecoder('utf-8').decode(bytes);
+                            file.sha = data.sha;
+                            file.loaded = true;
+                        }
+                    }
+                } catch (e) {
+                    file.content = `// ファイル読み込みエラー: ${e.message}`;
+                }
+            }
+
+            saveState();
+            renderAll();
+        }
+
+        function openCommitModal() {
+            const proj = getActiveProject();
+            const file = getActiveFile();
+            document.getElementById('commitRepoName').textContent = `${proj.owner}/${proj.name} (${proj.branch})`;
+            document.getElementById('commitFilePath').textContent = file.path || file.name;
+            document.getElementById('commitMessageInput').value = `feat: update ${file.name} via Antigravity Mobile IDE`;
+            openModal('commitModal');
+        }
+
+        async function executeGithubCommit() {
+            const proj = getActiveProject();
+            const file = getActiveFile();
+            const msg = document.getElementById('commitMessageInput').value.trim() || 'Update from Mobile IDE';
+
+            if (!proj.isRealGithub || !state.githubToken) {
+                saveState();
+                closeModal('commitModal');
+                showToast('デモモードのためローカルに保存しました（実PushはGitHub PAT設定後に有効）');
+                return;
+            }
+
+            const btn = document.getElementById('confirmCommitBtn');
+            btn.disabled = true;
+            btn.textContent = 'Push中...';
+
+            try {
+                // UTF-8 Base64エンコード
+                const utf8Bytes = new TextEncoder().encode(file.content);
+                let binary = '';
+                utf8Bytes.forEach(b => binary += String.fromCharCode(b));
+                const base64Content = btoa(binary);
+
+                const bodyPayload = {
+                    message: msg,
+                    content: base64Content,
+                    branch: proj.branch || 'main'
+                };
+                if (file.sha) bodyPayload.sha = file.sha;
+
+                const putUrl = `https://api.github.com/repos/${proj.owner}/${proj.name}/contents/${file.path || file.name}`;
+                const res = await fetch(putUrl, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${state.githubToken}`,
+                        'Accept': 'application/vnd.github+json',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(bodyPayload)
+                });
+
+                const result = await res.json();
+                if (!res.ok) throw new Error(result.message || `HTTP ${res.status}`);
+
+                file.sha = result.content?.sha || file.sha;
+                saveState();
+                closeModal('commitModal');
+                showToast(`✓ GitHub (${proj.name}) へPush完了！`);
+            } catch (err) {
+                showToast(`Push失敗: ${err.message}`, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Push実行';
+            }
+        }
+
+        // ==========================================
+        // 5. 自宅PC / Agent 汎用Webhook 送信機能
+        // ==========================================
+        async function sendToPcWebhook(payloadObj) {
+            if (!state.webhookUrl) {
+                return {
+                    ok: false,
+                    skipped: true,
+                    statusText: 'Webhook URL未設定（⚙️設定から登録可能）',
+                    payloadJson: JSON.stringify(payloadObj, null, 2)
+                };
+            }
+
+            const headers = { 'Content-Type': 'application/json' };
+            if (state.webhookSecret) {
+                headers['Authorization'] = state.webhookSecret.startsWith('Bearer ')
+                    ? state.webhookSecret
+                    : `Bearer ${state.webhookSecret}`;
+            }
+
+            try {
+                const res = await fetch(state.webhookUrl, {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify(payloadObj)
+                });
+                const resText = await res.text().catch(() => '');
+                return {
+                    ok: res.ok,
+                    status: res.status,
+                    statusText: `HTTP ${res.status} ${resText.slice(0, 80)}`,
+                    payloadJson: JSON.stringify(payloadObj, null, 2)
+                };
+            } catch (err) {
+                // HTTPSページからHTTPローカルIPへのMixed ContentやCORS制限時のフォールバック案内
+                return {
+                    ok: false,
+                    corsOrNetworkError: true,
+                    statusText: `送信ブロック/ネットワークエラー (${err.message}) ※Tailscale HTTPSやCORS許可を確認してください`,
+                    payloadJson: JSON.stringify(payloadObj, null, 2)
+                };
+            }
+        }
+
+        async function testWebhookConnection() {
+            const url = document.getElementById('webhookUrlInput').value.trim();
+            const secret = document.getElementById('webhookSecretInput').value.trim();
+            if (!url) {
+                showToast('Webhook URLを入力してください', 'error');
+                return;
+            }
+            state.webhookUrl = url;
+            state.webhookSecret = secret;
+
+            const resultBox = document.getElementById('webhookTestResult');
+            resultBox.classList.remove('hidden');
+            resultBox.textContent = '送信テスト中...';
+
+            const testPayload = {
+                event: 'ping',
+                source: 'AntigravityMobileIDE',
+                message: 'iPhoneからの疎通テストです',
+                timestamp: new Date().toISOString()
+            };
+
+            const res = await sendToPcWebhook(testPayload);
+            resultBox.textContent = res.ok
+                ? `✓ 成功: ${res.statusText}`
+                : `⚠️ ${res.statusText}`;
+        }
+
+        // ==========================================
+        // 6. マルチAIオーケストレーション & チャット処理
+        // ==========================================
+        function setOrchestrationMode(mode) {
+            state.orchestrationMode = mode;
+            const styles = {
+                gemini: {
+                    active: 'bg-blue-600/20 border-blue-500 text-blue-300',
+                    placeholder: '✨ Geminiにコード設計・バグ解析を依頼...'
+                },
+                relay: {
+                    active: 'bg-purple-600/20 border-purple-500 text-purple-300',
+                    placeholder: '🔗 1回の指示で Gemini仕様化 ➔ Copilot Issue起票 ➔ PC送信...'
+                },
+                webhook: {
+                    active: 'bg-emerald-600/20 border-emerald-500 text-emerald-300',
+                    placeholder: '💻 自宅PC (Mac mini / OpenClaw / Ollama) へ直接JSON指示...'
+                }
+            };
+
+            ['gemini', 'relay', 'webhook'].forEach(m => {
+                const pill = document.getElementById(`modePill-${m}`);
+                if (m === mode) {
+                    pill.className = `shrink-0 text-[11px] font-medium px-3 py-1.5 rounded-full border transition-all flex items-center gap-1 ${styles[m].active}`;
+                } else {
+                    pill.className = 'shrink-0 text-[11px] font-medium px-3 py-1.5 rounded-full border transition-all flex items-center gap-1 bg-zinc-900 border-zinc-800 text-zinc-400';
+                }
+            });
+
+            document.getElementById('chatInput').placeholder = styles[mode].placeholder;
+        }
+
+        async function handleSendMessage() {
+            const input = document.getElementById('chatInput');
+            const userText = input.value.trim();
+            if (!userText && !state.attachedImageBase64) return;
+
+            const promptText = userText || '添付した画像を解析して、関連するコードや改善案を作成してください。';
+            const imgBase64 = state.attachedImageBase64;
+            const imgMime = state.attachedImageMime;
+
+            input.value = '';
+            input.style.height = 'auto';
+            clearAttachedImage();
+
+            const proj = getActiveProject();
+            const file = getActiveFile();
+            if (!state.chatHistories[proj.id]) state.chatHistories[proj.id] = [];
+
+            // ユーザーメッセージ追加
+            state.chatHistories[proj.id].push({
+                role: 'user',
+                content: promptText,
+                mode: state.orchestrationMode,
+                hasImage: !!imgBase64
+            });
+            renderChatMessages();
+
+            const sendBtn = document.getElementById('sendChatBtn');
+            sendBtn.disabled = true;
+
+            try {
+                if (state.orchestrationMode === 'relay') {
+                    // ==========================================
+                    // 【フル自動リレーモード】Gemini ➔ GitHub Copilot ➔ PC Webhook
+                    // ==========================================
+                    await executeFullRelayPipeline(promptText, imgBase64, imgMime, proj, file);
+                } else if (state.orchestrationMode === 'webhook') {
+                    // ==========================================
+                    // 【自宅PCへ直接指示モード】
+                    // ==========================================
+                    const payload = {
+                        event: 'direct_pc_command',
+                        repository: `${proj.owner}/${proj.name}`,
+                        branch: proj.branch,
+                        active_file: file.path || file.name,
+                        user_prompt: promptText,
+                        timestamp: new Date().toISOString()
+                    };
+                    const whRes = await sendToPcWebhook(payload);
+                    state.chatHistories[proj.id].push({
+                        role: 'pipeline',
+                        pipelineType: 'webhook_only',
+                        webhookResult: whRes
+                    });
+                    saveState();
+                    renderChatMessages();
+                } else {
+                    // ==========================================
+                    // 【Gemini 単独設計・解析モード】
+                    // ==========================================
+                    const loadingId = addLoadingIndicator('Gemini がコードと設計を解析中...');
+                    const aiResponse = await callGeminiStandard(promptText, imgBase64, imgMime, proj, file);
+                    removeLoadingIndicator(loadingId);
+
+                    state.chatHistories[proj.id].push({
+                        role: 'assistant',
+                        content: aiResponse
+                    });
+                    saveState();
+                    renderChatMessages();
+                }
+            } catch (err) {
+                removeAllLoadingIndicators();
+                state.chatHistories[proj.id].push({
+                    role: 'assistant',
+                    content: `⚠️ エラーが発生しました: \`${err.message}\``
+                });
+                renderChatMessages();
+            } finally {
+                sendBtn.disabled = false;
+            }
+        }
+
+        async function executeFullRelayPipeline(promptText, imgBase64, imgMime, proj, file) {
+            const loadingId = addLoadingIndicator('🔗 Step 1/3: Gemini で仕様・GitHub Issue・PCタスクを構造化中...');
+
+            // Step 1: Gemini による構造化JSON生成
+            const structuredSpec = await callGeminiStructuredRelay(promptText, imgBase64, imgMime, proj, file);
+            removeLoadingIndicator(loadingId);
+
+            // Step 2: GitHub Issue起票 & Copilotアサイン
+            const loadingId2 = addLoadingIndicator('🐙 Step 2/3: GitHub Issue起票 & Copilotへリレー中...');
+            let githubIssueResult = {
+                ok: false,
+                isDemo: !proj.isRealGithub || !state.githubToken,
+                url: `https://github.com/${proj.owner}/${proj.name}/issues/new`,
+                number: Math.floor(Math.random() * 90) + 10,
+                statusText: 'Demoモード（仮想Issue生成完了）'
+            };
+
+            if (proj.isRealGithub && state.githubToken) {
+                try {
+                    const issueRes = await fetch(`https://api.github.com/repos/${proj.owner}/${proj.name}/issues`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${state.githubToken}`,
+                            'Accept': 'application/vnd.github+json',
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            title: structuredSpec.title,
+                            body: `${structuredSpec.body}\n\n---\n*Generated & Relayed via Antigravity Mobile IDE*`,
+                            assignees: state.copilotAssignee ? [state.copilotAssignee] : []
+                        })
+                    });
+                    const issueData = await issueRes.json();
+                    if (issueRes.ok) {
+                        githubIssueResult = {
+                            ok: true,
+                            isDemo: false,
+                            url: issueData.html_url,
+                            number: issueData.number,
+                            statusText: `Issue #${issueData.number} 起票完了 (@${state.copilotAssignee} アサイン試行済)`
+                        };
+                    } else {
+                        githubIssueResult.statusText = `Issue作成注意: ${issueData.message}`;
+                    }
+                } catch (e) {
+                    githubIssueResult.statusText = `GitHub API通信エラー: ${e.message}`;
+                }
+            }
+            removeLoadingIndicator(loadingId2);
+
+            // Step 3: 自宅PC / Agent WebhookへJSON POST送信
+            const loadingId3 = addLoadingIndicator('💻 Step 3/3: 自宅PC / エージェントへJSONリレー送信中...');
+            const webhookPayload = {
+                event: 'ai_relay_task',
+                repository: `${proj.owner}/${proj.name}`,
+                branch: proj.branch,
+                active_file: file.path || file.name,
+                user_prompt: promptText,
+                gemini_spec: structuredSpec,
+                github_issue_url: githubIssueResult.url,
+                timestamp: new Date().toISOString()
+            };
+            const webhookResult = await sendToPcWebhook(webhookPayload);
+            removeLoadingIndicator(loadingId3);
+
+            // パイプライン結果カードをチャット履歴へ追加
+            state.chatHistories[proj.id].push({
+                role: 'pipeline',
+                pipelineType: 'full_relay',
+                spec: structuredSpec,
+                githubResult: githubIssueResult,
+                webhookResult: webhookResult
+            });
+
+            // コードパッチが含まれていればDiff待機状態にもセット
+            if (structuredSpec.code_patch && structuredSpec.code_patch.trim().length > 0) {
+                state.pendingDiff = {
+                    fileId: file.id,
+                    fileName: file.name,
+                    oldContent: file.content,
+                    newContent: structuredSpec.code_patch
+                };
+            }
+
+            saveState();
+            renderAll();
+        }
+
+        // Gemini API 呼び出し（通常Markdown応答）
+        async function callGeminiStandard(userQuery, imgBase64, imgMime, project, activeFile) {
+            const apiKey = state.customApiKey || "";
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+
+            const systemPrompt = `あなたはiPhone上で動作するモバイルIDE「Antigravity AI」のAIアーキテクトです。
+現在のプロジェクト: ${project.name} / ファイル: ${activeFile.name} (${activeFile.language})
+現在のコード:
+\`\`\`${activeFile.language}
+${activeFile.content}
+\`\`\`
+ユーザーはiPhoneから操作しています。要点を簡潔にまとめ、コード修正案を提示する際はファイル全体の完全なコードブロック（\`\`\`${activeFile.language} ... \`\`\`）を出力してください。`;
+
+            const parts = [{ text: userQuery }];
+            if (imgBase64 && imgMime) {
+                parts.push({
+                    inlineData: { mimeType: imgMime, data: imgBase64 }
+                });
+            }
+
+            const payload = {
+                contents: [{ parts }],
+                systemInstruction: { parts: [{ text: systemPrompt }] }
+            };
+
+            return await fetchGeminiWithRetry(apiUrl, payload);
+        }
+
+        // Gemini API 呼び出し（フル自動リレー用 構造化JSON出力）
+        async function callGeminiStructuredRelay(userQuery, imgBase64, imgMime, project, activeFile) {
+            const apiKey = state.customApiKey || "";
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+
+            const systemPrompt = `あなたは複数のAIエージェント（GitHub Copilotと自宅Mac mini上のローカルAI）へタスクを振り分ける司令塔AIです。
+ユーザーの要望と現在のコードをもとに、GitHub Issue用のタイトル・詳細仕様・修正コード案・PC側エージェントへの実行指示をJSON形式で出力してください。
+現在ファイル: ${activeFile.name}
+現在コード:
+${activeFile.content}`;
+
+            const parts = [{ text: userQuery }];
+            if (imgBase64 && imgMime) {
+                parts.push({ inlineData: { mimeType: imgMime, data: imgBase64 } });
+            }
+
+            const payload = {
+                contents: [{ parts }],
+                systemInstruction: { parts: [{ text: systemPrompt }] },
+                generationConfig: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: "OBJECT",
+                        properties: {
+                            title: { type: "STRING", description: "GitHub Issueの簡潔なタイトル" },
+                            body: { type: "STRING", description: "GitHub Copilot向けの実装要件・完了条件（Markdown）" },
+                            target_file: { type: "STRING", description: "対象ファイルパス" },
+                            code_patch: { type: "STRING", description: "対象ファイルの修正後コード全体（変更不要なら空文字）" },
+                            pc_task: { type: "STRING", description: "自宅PCのOpenClaw/Ollamaに実行させる検証やドキュメント記録タスク" }
+                        },
+                        required: ["title", "body", "target_file", "code_patch", "pc_task"]
+                    }
+                }
+            };
+
+            const rawJsonText = await fetchGeminiWithRetry(apiUrl, payload);
+            return JSON.parse(rawJsonText);
+        }
+
+        async function fetchGeminiWithRetry(apiUrl, payload) {
+            const delays = [1000, 2000, 4000];
+            for (let attempt = 0; attempt <= delays.length; attempt++) {
+                try {
+                    const res = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (!res.ok) throw new Error(`Gemini API HTTP ${res.status}`);
+                    const data = await res.json();
+                    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+                    if (!text) throw new Error('AIからの応答が空でした');
+                    return text;
+                } catch (e) {
+                    if (attempt === delays.length) throw e;
+                    await new Promise(r => setTimeout(r, delays[attempt]));
+                }
+            }
+        }
+
+        // ==========================================
+        // 7. チャット描画（パイプラインカード＆Diffボタン付）
+        // ==========================================
+        function renderChatMessages() {
+            const container = document.getElementById('chatMessages');
+            const messages = state.chatHistories[state.activeProjectId] || [];
+            container.innerHTML = '';
+
+            messages.forEach(msg => {
+                const wrapper = document.createElement('div');
+
+                if (msg.role === 'user') {
+                    wrapper.className = 'flex flex-col items-end gap-1';
+                    const modeTag = msg.mode === 'relay' ? '🔗 フル自動リレー' : (msg.mode === 'webhook' ? '💻 PC直接送信' : '');
+                    wrapper.innerHTML = `
+                        ${modeTag ? `<span class="text-[10px] text-zinc-400 px-1">${modeTag}</span>` : ''}
+                        <div class="max-w-[85%] bg-blue-600 text-white rounded-2xl rounded-tr-sm px-3.5 py-2.5 text-sm leading-relaxed shadow-md">
+                            ${msg.hasImage ? '<div class="text-[11px] bg-blue-700/70 px-2 py-0.5 rounded mb-1 inline-block">🖼️ 画像添付あり</div><br>' : ''}
+                            ${escapeHtml(msg.content).replace(/\n/g, '<br>')}
+                        </div>
+                    `;
+                } else if (msg.role === 'pipeline') {
+                    // オーケストレーション結果カード
+                    wrapper.className = 'rounded-2xl border border-zinc-800 bg-zinc-900/90 p-3.5 space-y-3 shadow-xl';
+                    if (msg.pipelineType === 'full_relay') {
+                        const { spec, githubResult, webhookResult } = msg;
+                        wrapper.innerHTML = `
+                            <div class="flex items-center justify-between border-b border-zinc-800 pb-2">
+                                <span class="text-xs font-bold text-purple-300 flex items-center gap-1.5">
+                                    <span>🔗</span> AI連携リレー実行レポート
+                                </span>
+                                <span class="text-[10px] text-zinc-500 font-mono">3 STEPS</span>
+                            </div>
+
+                            <!-- Step 1 -->
+                            <div class="p-2.5 rounded-xl bg-zinc-950 border border-zinc-800/80 space-y-1">
+                                <div class="text-[11px] font-semibold text-blue-400">Step 1: Gemini 仕様・Issue構造化 ✓</div>
+                                <div class="text-xs font-bold text-white">${escapeHtml(spec.title)}</div>
+                                <p class="text-[11px] text-zinc-400 line-clamp-2">${escapeHtml(spec.body)}</p>
+                                ${spec.code_patch ? `
+                                    <div class="pt-1.5 flex gap-2">
+                                        <button onclick="switchTab('diff')" class="px-2.5 py-1 rounded-lg bg-emerald-600/20 border border-emerald-500/40 text-emerald-300 text-[11px] font-medium">
+                                            差分(Diff)を確認する
+                                        </button>
+                                    </div>
+                                ` : ''}
+                            </div>
+
+                            <!-- Step 2 -->
+                            <div class="p-2.5 rounded-xl bg-zinc-950 border border-zinc-800/80 space-y-1">
+                                <div class="text-[11px] font-semibold text-amber-300">Step 2: GitHub Copilot 連携</div>
+                                <div class="text-xs text-zinc-300">${escapeHtml(githubResult.statusText)}</div>
+                                <a href="${escapeHtml(githubResult.url)}" target="_blank" rel="noopener" class="inline-flex items-center gap-1 text-[11px] text-blue-400 underline mt-0.5">
+                                    GitHub Issueを開く ↗
+                                </a>
+                            </div>
+
+                            <!-- Step 3 -->
+                            <div class="p-2.5 rounded-xl bg-zinc-950 border border-zinc-800/80 space-y-1.5">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-[11px] font-semibold text-emerald-400">Step 3: 自宅PC Webhook送信</span>
+                                    <button onclick='copyTextToClipboard(${JSON.stringify(webhookResult.payloadJson)}); showToast("送信JSONをコピーしました");' class="text-[10px] px-2 py-0.5 rounded bg-zinc-800 text-zinc-300">JSONコピー</button>
+                                </div>
+                                <div class="text-[11px] text-zinc-300">${escapeHtml(webhookResult.statusText)}</div>
+                                <pre class="text-[10px] font-mono text-zinc-400 bg-black/50 p-2 rounded-lg overflow-x-auto max-h-28">${escapeHtml(webhookResult.payloadJson)}</pre>
+                            </div>
+                        `;
+                    } else {
+                        // PC直接送信カード
+                        const { webhookResult } = msg;
+                        wrapper.innerHTML = `
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs font-bold text-emerald-400">💻 自宅PC Webhook 直接送信</span>
+                                <button onclick='copyTextToClipboard(${JSON.stringify(webhookResult.payloadJson)}); showToast("JSONをコピーしました");' class="text-[10px] px-2 py-0.5 rounded bg-zinc-800 text-zinc-300">JSONコピー</button>
+                            </div>
+                            <div class="text-xs text-zinc-300">${escapeHtml(webhookResult.statusText)}</div>
+                            <pre class="text-[10px] font-mono text-zinc-400 bg-zinc-950 p-2.5 rounded-xl border border-zinc-800 overflow-x-auto max-h-32">${escapeHtml(webhookResult.payloadJson)}</pre>
+                        `;
+                    }
+                } else {
+                    // 通常のAI応答
+                    wrapper.className = 'space-y-2';
+                    const parsedHtml = marked.parse(msg.content);
+                    wrapper.innerHTML = `
+                        <div class="flex items-center gap-2 text-xs text-zinc-400">
+                            <span class="w-5 h-5 rounded-full rainbow-border flex items-center justify-center text-[10px] text-amber-400">✦</span>
+                            <span class="font-medium text-zinc-300">Antigravity AI</span>
+                        </div>
+                        <div class="prose prose-invert prose-sm max-w-none text-zinc-200 text-sm leading-relaxed space-y-2.5">
+                            ${parsedHtml}
+                        </div>
+                    `;
+                }
+
+                container.appendChild(wrapper);
+            });
+
+            // コードブロックに [差分確認] と [即適用] ボタンを追加
+            container.querySelectorAll('pre').forEach(preEl => {
+                const codeEl = preEl.querySelector('code');
+                if (!codeEl) return;
+                hljs.highlightElement(codeEl);
+
+                const rawCode = codeEl.textContent;
+                const langMatch = codeEl.className.match(/language-(\w+)/);
+                const lang = langMatch ? langMatch[1] : 'code';
+
+                const card = document.createElement('div');
+                card.className = 'my-2.5 rounded-xl border border-zinc-800 bg-[#0d0d10] overflow-hidden shadow-lg';
+
+                const header = document.createElement('div');
+                header.className = 'flex items-center justify-between px-3 py-1.5 bg-zinc-900 border-b border-zinc-800 text-[11px]';
+                header.innerHTML = `
+                    <span class="font-mono text-zinc-400">${escapeHtml(lang)}</span>
+                    <div class="flex items-center gap-1.5">
+                        <button type="button" class="diff-btn flex items-center gap-1 text-emerald-300 px-2 py-1 rounded bg-emerald-500/10 border border-emerald-500/30 active:scale-95">
+                            <span>差分確認</span>
+                        </button>
+                        <button type="button" class="apply-btn flex items-center gap-1 text-blue-300 px-2 py-1 rounded bg-blue-500/15 border border-blue-500/30 font-medium active:scale-95">
+                            <span>即適用</span>
+                        </button>
+                    </div>
+                `;
+
+                header.querySelector('.diff-btn').onclick = () => {
+                    const file = getActiveFile();
+                    state.pendingDiff = {
+                        fileId: file.id,
+                        fileName: file.name,
+                        oldContent: file.content,
+                        newContent: rawCode
+                    };
+                    renderAll();
+                    switchTab('diff');
+                };
+
+                header.querySelector('.apply-btn').onclick = () => {
+                    const file = getActiveFile();
+                    file.content = rawCode;
+                    saveState();
+                    renderAll();
+                    switchTab('editor');
+                    showToast(`「${file.name}」にコードを適用しました`);
+                };
+
+                preEl.parentNode.insertBefore(card, preEl);
+                card.appendChild(header);
+                preEl.className = 'm-0 overflow-x-auto';
+                card.appendChild(preEl);
+            });
+
+            lucide.createIcons();
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // ==========================================
+        // 8. Diff（差分レビュー）ビューア
+        // ==========================================
+        function renderDiffView() {
+            const container = document.getElementById('diffViewerContainer');
+            const labelEl = document.getElementById('diffTargetFileLabel');
+            const actionsEl = document.getElementById('diffActionButtons');
+
+            if (!state.pendingDiff) {
+                labelEl.textContent = '現在レビュー待ちの差分はありません';
+                actionsEl.classList.add('hidden');
+                container.innerHTML = `
+                    <div class="h-full flex flex-col items-center justify-center text-center p-6 text-zinc-500 space-y-2">
+                        <i data-lucide="check-circle-2" class="w-10 h-10 text-zinc-700"></i>
+                        <p class="text-xs">AIがコード変更を提案すると、ここに「変更前（赤）」と「変更後（緑）」の差分が表示されます。</p>
+                    </div>
+                `;
+                return;
+            }
+
+            labelEl.textContent = `対象: ${state.pendingDiff.fileName}`;
+            actionsEl.classList.remove('hidden');
+
+            const oldLines = state.pendingDiff.oldContent.split('\n');
+            const newLines = state.pendingDiff.newContent.split('\n');
+            const maxLen = Math.max(oldLines.length, newLines.length);
+
+            let html = '<div class="space-y-0.5">';
+            for (let i = 0; i < maxLen; i++) {
+                const oLine = oldLines[i];
+                const nLine = newLines[i];
+
+                if (oLine === nLine) {
+                    html += `<div class="px-2 py-0.5 text-zinc-500 whitespace-pre overflow-x-auto">  ${escapeHtml(oLine ?? '')}</div>`;
+                } else {
+                    if (oLine !== undefined) {
+                        html += `<div class="px-2 py-0.5 bg-red-950/50 text-red-300 border-l-2 border-red-500 whitespace-pre overflow-x-auto">- ${escapeHtml(oLine)}</div>`;
+                    }
+                    if (nLine !== undefined) {
+                        html += `<div class="px-2 py-0.5 bg-emerald-950/50 text-emerald-300 border-l-2 border-emerald-500 whitespace-pre overflow-x-auto">+ ${escapeHtml(nLine)}</div>`;
+                    }
+                }
+            }
+            html += '</div>';
+            container.innerHTML = html;
+        }
+
+        function approvePendingDiff() {
+            if (!state.pendingDiff) return;
+            const file = getActiveFile();
+            file.content = state.pendingDiff.newContent;
+            state.pendingDiff = null;
+            saveState();
+            renderAll();
+            switchTab('editor');
+            showToast('✓ 差分を承認し、エディタへ反映しました');
+        }
+
+        function discardPendingDiff() {
+            state.pendingDiff = null;
+            renderAll();
+            showToast('差分案を破棄しました');
+        }
+
+        // ==========================================
+        // 9. 音声入力（Web Speech API）& 画像添付
+        // ==========================================
+        let recognition = null;
+        let isRecording = false;
+
+        function toggleVoiceInput() {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecognition) {
+                showToast('お使いのブラウザは音声認識に未対応です（iPhone標準キーボードのマイクボタンも利用できます）', 'error');
+                return;
+            }
+
+            const btn = document.getElementById('voiceInputBtn');
+            if (isRecording && recognition) {
+                recognition.stop();
+                return;
+            }
+
+            recognition = new SpeechRecognition();
+            recognition.lang = 'ja-JP';
+            recognition.interimResults = false;
+
+            recognition.onstart = () => {
+                isRecording = true;
+                btn.classList.add('bg-red-600', 'text-white', 'recording-pulse');
+                showToast('🎙️ 音声を聞き取っています...');
+            };
+
+            recognition.onresult = (event) => {
+                const transcript = event.results[0][0].transcript;
+                const input = document.getElementById('chatInput');
+                input.value = (input.value ? input.value + ' ' : '') + transcript;
+                autoResizeTextarea(input);
+            };
+
+            recognition.onerror = (e) => {
+                showToast(`音声認識エラー: ${e.error}`, 'error');
+            };
+
+            recognition.onend = () => {
+                isRecording = false;
+                btn.classList.remove('bg-red-600', 'text-white', 'recording-pulse');
+            };
+
+            recognition.start();
+        }
+
+        function handleImageUpload(event) {
+            const file = event.target.files?.[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const dataUrl = e.target.result;
+                const [meta, base64] = dataUrl.split(',');
+                const mimeMatch = meta.match(/data:(.*);base64/);
+                state.attachedImageMime = mimeMatch ? mimeMatch[1] : 'image/png';
+                state.attachedImageBase64 = base64;
+
+                document.getElementById('attachedImageThumb').src = dataUrl;
+                document.getElementById('imageAttachmentBar').classList.remove('hidden');
+            };
+            reader.readAsDataURL(file);
+            event.target.value = '';
+        }
+
+        function clearAttachedImage() {
+            state.attachedImageBase64 = null;
+            state.attachedImageMime = null;
+            document.getElementById('imageAttachmentBar').classList.add('hidden');
+        }
+
+        // ==========================================
+        // 10. ライブプレビュー＆コンソール実行
+        // ==========================================
+        function runCodePreview() {
+            const file = getActiveFile();
+            const lang = (file.language || '').toLowerCase();
+            const code = file.content || '';
+
+            const webContainer = document.getElementById('webPreviewContainer');
+            const consoleContainer = document.getElementById('consoleOutputContainer');
+            const previewTitle = document.getElementById('previewModeTitle');
+            const iframe = document.getElementById('previewIframe');
+
+            clearConsole();
+
+            if (lang === 'html' || code.trim().startsWith('<')) {
+                previewTitle.textContent = `Web Preview: ${file.name}`;
+                webContainer.classList.remove('hidden');
+                consoleContainer.classList.remove('h-full');
+                consoleContainer.classList.add('h-44');
+
+                const hook = `<script>
+                    (function(){
+                        const ol = console.log, oe = console.error;
+                        console.log = (...a) => { window.parent.postMessage({type:'sb-log', lvl:'info', txt:a.map(x=>typeof x==='object'?JSON.stringify(x):String(x)).join(' ')}, '*'); ol.apply(console, a); };
+                        console.error = (...a) => { window.parent.postMessage({type:'sb-log', lvl:'error', txt:a.map(x=>String(x)).join(' ')}, '*'); oe.apply(console, a); };
+                    })();
+                <\/script>`;
+                iframe.srcdoc = hook + code;
+                appendConsoleLog(`[HTML] ${file.name} をレンダリングしました`, 'system');
+            } else if (lang === 'javascript' || lang === 'js') {
+                previewTitle.textContent = `JS Runner: ${file.name}`;
+                webContainer.classList.add('hidden');
+                consoleContainer.classList.remove('h-44');
+                consoleContainer.classList.add('h-full');
+
+                appendConsoleLog(`> node ${file.name}`, 'system');
+                try {
+                    const customConsole = {
+                        log: (...a) => appendConsoleLog(a.map(x => typeof x === 'object' ? JSON.stringify(x, null, 2) : String(x)).join(' '), 'info'),
+                        error: (...a) => appendConsoleLog(a.map(x => String(x)).join(' '), 'error'),
+                        warn: (...a) => appendConsoleLog(a.map(x => String(x)).join(' '), 'warn')
+                    };
+                    new Function('console', code)(customConsole);
+                    appendConsoleLog('✓ 実行完了', 'success');
+                } catch (err) {
+                    appendConsoleLog(`Error: ${err.message}`, 'error');
+                }
+            } else {
+                previewTitle.textContent = `Syntax & Remote Check (${lang.toUpperCase()})`;
+                webContainer.classList.add('hidden');
+                consoleContainer.classList.remove('h-44');
+                consoleContainer.classList.add('h-full');
+                appendConsoleLog(`$ antigravity-check ${file.name}`, 'system');
+                appendConsoleLog(`✓ ${code.split('\n').length} 行のコードを確認しました。自宅PCで実行する場合は「💻 自宅PCへ直接指示」タブからWebhook送信できます。`, 'info');
+            }
+        }
+
+        window.addEventListener('message', (e) => {
+            if (e.data?.type === 'sb-log') appendConsoleLog(e.data.txt, e.data.lvl);
+        });
+
+        function appendConsoleLog(text, level = 'info') {
+            const logsEl = document.getElementById('consoleLogs');
+            const line = document.createElement('div');
+            const colors = { info: 'text-zinc-200', error: 'text-red-400', warn: 'text-amber-400', success: 'text-emerald-400', system: 'text-blue-400' };
+            line.className = `${colors[level] || 'text-zinc-200'} whitespace-pre-wrap break-all`;
+            line.textContent = text;
+            logsEl.appendChild(line);
+            logsEl.scrollTop = logsEl.scrollHeight;
+        }
+
+        function clearConsole() {
+            document.getElementById('consoleLogs').innerHTML = '';
+        }
+
+        // ==========================================
+        // 11. ユーティリティ＆モーダル操作
+        // ==========================================
+        function openSettingsModal() {
+            document.getElementById('githubTokenInput').value = state.githubToken;
+            document.getElementById('copilotAssigneeInput').value = state.copilotAssignee;
+            document.getElementById('webhookUrlInput').value = state.webhookUrl;
+            document.getElementById('webhookSecretInput').value = state.webhookSecret;
+            document.getElementById('customApiKeyInput').value = state.customApiKey;
+            openModal('settingsModal');
+        }
+
+        function saveSettings() {
+            state.githubToken = document.getElementById('githubTokenInput').value.trim();
+            state.copilotAssignee = document.getElementById('copilotAssigneeInput').value.trim() || 'copilot';
+            state.webhookUrl = document.getElementById('webhookUrlInput').value.trim();
+            state.webhookSecret = document.getElementById('webhookSecretInput').value.trim();
+            state.customApiKey = document.getElementById('customApiKeyInput').value.trim();
+            saveState();
+            renderAll();
+            closeModal('settingsModal');
+            showToast('設定を端末に保存しました');
+        }
+
+        function togglePasswordVisibility(inputId) {
+            const el = document.getElementById(inputId);
+            el.type = el.type === 'password' ? 'text' : 'password';
+        }
+
+        function resetAllData() {
+            localStorage.removeItem('antigravity_orchestrator_v2');
+            state.githubToken = '';
+            state.githubUser = null;
+            state.webhookUrl = '';
+            state.webhookSecret = '';
+            state.customApiKey = '';
+            state.pendingDiff = null;
+            loadState();
+            renderAll();
+            closeModal('settingsModal');
+            showToast('設定とプロジェクトを初期状態に戻しました');
+        }
+
+        function openFileSelectorModal() {
+            const proj = getActiveProject();
+            document.getElementById('modalProjectSubtitle').textContent = `${proj.name} (${proj.branch})`;
+            const listEl = document.getElementById('modalFileList');
+            listEl.innerHTML = '';
+
+            proj.files.forEach(f => {
+                const isSelected = f.id === proj.activeFileId;
+                const row = document.createElement('button');
+                row.onclick = () => {
+                    selectFile(f.id);
+                    closeModal('fileSelectorModal');
+                };
+                row.className = `w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-left border ${
+                    isSelected ? 'bg-blue-500/10 border-blue-500/50 text-white' : 'bg-zinc-950 border-zinc-800 text-zinc-300'
+                }`;
+                row.innerHTML = `
+                    <span class="text-xs font-mono truncate">${escapeHtml(f.path || f.name)}</span>
+                    <span class="text-[10px] text-zinc-500 uppercase ml-2 shrink-0">${escapeHtml(f.language)}</span>
+                `;
+                listEl.appendChild(row);
+            });
+
+            openModal('fileSelectorModal');
+        }
+
+        function openNewProjectModal() {
+            state.newItemMode = 'project';
+            document.getElementById('newItemModalTitle').textContent = '新規ローカルプロジェクト';
+            document.getElementById('newItemInputLabel').textContent = 'プロジェクト名';
+            document.getElementById('newItemNameInput').value = '';
+            openModal('newItemModal');
+        }
+
+        function openNewFileModal() {
+            state.newItemMode = 'file';
+            document.getElementById('newItemModalTitle').textContent = '新規ファイル追加';
+            document.getElementById('newItemInputLabel').textContent = 'ファイル名 (例: app.js / index.html)';
+            document.getElementById('newItemNameInput').value = '';
+            openModal('newItemModal');
+        }
+
+        function confirmCreateNewItem() {
+            const name = document.getElementById('newItemNameInput').value.trim();
+            if (!name) return;
+
+            if (state.newItemMode === 'project') {
+                const id = `local-${Date.now()}`;
+                state.projects.unshift({
+                    id,
+                    name,
+                    owner: 'local',
+                    branch: 'main',
+                    isRealGithub: false,
+                    activeFileId: 'index.html',
+                    files: [{
+                        id: 'index.html',
+                        name: 'index.html',
+                        path: 'index.html',
+                        language: 'html',
+                        loaded: true,
+                        content: `<!DOCTYPE html>\n<html lang="ja">\n<head>\n  <meta charset="UTF-8">\n  <script src="https://cdn.tailwindcss.com"><\/script>\n</head>\n<body class="bg-zinc-950 text-white p-6">\n  <h1 class="text-xl font-bold">${escapeHtml(name)}</h1>\n</body>\n</html>`
+                    }]
+                });
+                selectProject(id);
+            } else {
+                const proj = getActiveProject();
+                const fileId = `${name}-${Date.now().toString().slice(-3)}`;
+                proj.files.push({
+                    id: fileId,
+                    name: name.split('/').pop(),
+                    path: name,
+                    language: detectLanguageFromFilename(name),
+                    loaded: true,
+                    content: `// ${name}\n`
+                });
+                proj.activeFileId = fileId;
+                saveState();
+                renderAll();
+            }
+            closeModal('newItemModal');
+        }
+
+        function detectLanguageFromFilename(filename) {
+            const ext = filename.split('.').pop().toLowerCase();
+            const map = { html: 'html', js: 'javascript', ts: 'typescript', swift: 'swift', py: 'python', st: 'iecst', md: 'markdown', json: 'json' };
+            return map[ext] || 'plaintext';
+        }
+
+        function addLoadingIndicator(text) {
+            const container = document.getElementById('chatMessages');
+            const id = 'loading-' + Date.now() + Math.random().toString(36).slice(2, 5);
+            const div = document.createElement('div');
+            div.id = id;
+            div.className = 'ai-loading-item flex items-center gap-2 text-xs text-zinc-400 py-1.5';
+            div.innerHTML = `<span class="w-4 h-4 rounded-full border-2 border-blue-500 border-t-transparent animate-spin shrink-0"></span><span>${escapeHtml(text)}</span>`;
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+            return id;
+        }
+
+        function removeLoadingIndicator(id) {
+            document.getElementById(id)?.remove();
+        }
+
+        function removeAllLoadingIndicators() {
+            document.querySelectorAll('.ai-loading-item').forEach(el => el.remove());
+        }
+
+        function copyEditorCode() {
+            copyTextToClipboard(document.getElementById('codeEditorTextarea').value);
+            showToast('エディタのコードをコピーしました');
+        }
+
+        function copyTextToClipboard(text) {
+            const temp = document.createElement('textarea');
+            temp.value = text;
+            temp.style.position = 'fixed';
+            temp.style.opacity = '0';
+            document.body.appendChild(temp);
+            temp.select();
+            document.execCommand('copy');
+            document.body.removeChild(temp);
+        }
+
+        function autoResizeTextarea(el) {
+            el.style.height = 'auto';
+            el.style.height = Math.min(el.scrollHeight, 112) + 'px';
+        }
+
+        function openModal(id) {
+            const el = document.getElementById(id);
+            el.classList.remove('hidden');
+            el.classList.add('flex');
+        }
+
+        function closeModal(id) {
+            const el = document.getElementById(id);
+            el.classList.add('hidden');
+            el.classList.remove('flex');
+        }
+
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = `px-4 py-2.5 rounded-full text-xs font-medium shadow-xl border backdrop-blur-md text-center transition-all duration-300 ${
+                type === 'error' ? 'bg-red-950/95 border-red-800 text-red-200' : 'bg-zinc-900/95 border-zinc-700 text-white'
+            }`;
+            toast.textContent = message;
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.classList.add('opacity-0', '-translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 2500);
+        }
+
+        function escapeHtml(str) {
+            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            loadState();
+            renderAll();
+        });
+    </script>
+</body>
+</html>
